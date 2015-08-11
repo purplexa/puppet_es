@@ -7,7 +7,7 @@ Send a puppet report to ElasticSearch.
 Configuration is read from the file specified in the environment variable
 `PUPPET_ES_CONFIG` (defaults to `/etc/puppet_es.conf`) and uses ConfigParser
 syntax. A sample configuration file is included as
-[`etc/puppet_es.conf.example`](etc/puppet_es.conf).
+[`etc/puppet_es.conf.example`](etc/puppet_es.conf.example).
 
 ## Usage
 
