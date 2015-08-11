@@ -10,4 +10,5 @@ setup(name='puppet_es',
       install_requires=['elasticsearch'],
       tests_require=['mock', 'pytest'],
       packages=['puppet_es'],
+      include_package_data=True,
       entry_points={'console_scripts': 'send_report_to_es = puppet_es:main'})
