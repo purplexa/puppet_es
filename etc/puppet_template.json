@@ -1,0 +1,79 @@
+{
+  "template": "puppet",
+  "settings": {
+    "index.refresh_interval": "5s"
+  },
+  "mappings": {
+    "_default_": {
+       "_all": { "enabled": true, "omit_norms": true },
+       "dynamic_templates": [ {
+         "string_fields": {
+           "match": "*",
+           "match_mapping_type": "string",
+           "mapping": {
+             "type": "string", "index": "analyzed", "omit_norms": true,
+               "fields": {
+                 "raw": { "type": "string", "index": "not_analyzed", "ignore_above": 256 }
+               }
+           }
+         }
+       } ],
+       "properties": {
+         "transaction_uuid": { "type": "string", "index": "not_analyzed" },
+         "configuration_version": {"type": "integer" },
+         "environment": { "type": "string", "index": "not_analyzed" },
+         "host": { "type": "string", "index": "not_analyzed" }
+         }
+       },
+    "report": {
+      "properties": {
+        "time": { "type": "date" },
+        "status": { "type": "string", "index": "not_analyzed" },
+        "total_resources": { "type": "integer" },
+        "skipped_resources": { "type": "integer" },
+        "failed_resources": { "type": "integer" },
+        "failed_to_restart_resources": { "type": "integer" },
+        "restarted_resources": { "type": "integer" },
+        "changed_resources": { "type": "integer" },
+        "out_of_sync_resources": { "type": "integer" },
+        "scheduled_resources": { "type": "integer" },
+        "total_events": { "type": "integer" },
+        "failure_events": { "type": "integer" },
+        "success_events": { "type": "integer" },
+        "noop_events": { "type": "integer" },
+        "config_retrieval_time": { "type": "double" },
+        "total_time": { "type": "double" },
+        "total_changes": { "type": "integer" }
+      }
+    },
+    "resource_status": {
+      "properties": {
+        "name": { "type": "string", "index": "not_analyzed" },
+        "resource_title": { "type": "string", "index": "not_analyzed" },
+        "file_line": { "type": "integer" },
+        "resource_type": { "type": "string", "index": "not_analyzed" },
+        "file": { "type": "string", "index": "not_analyzed" },
+        "failed": { "type": "boolean" },
+        "changed": { "type": "boolean" },
+        "out_of_sync": { "type": "boolean" },
+        "skipped": { "type": "boolean" },
+        "time": { "type": "date" },
+        "change_count": { "type": "integer" },
+        "out_of_sync_count": { "type": "integer" }
+      }
+    },
+    "event": {
+      "properties": {
+        "audited": { "type": "boolean" },
+        "desired_value": { "type": "string" },
+        "historical_value": { "type": "string" },
+        "message": { "type": "string" },
+        "name": { "type": "string" },
+        "previous_value": { "type": "string" },
+        "property": { "type": "string", "index": "not_analyzed" },
+        "status": { "type": "string", "index": "not_analyzed" },
+        "time": { "type": "date" }
+      }
+    }
+  }
+}
