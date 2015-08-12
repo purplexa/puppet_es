@@ -94,21 +94,21 @@ def test_get_conf(mockOsEnvGet, config, config_file):
         mockRCP.return_value = rcpWrap
 
         if not config.get('elasticsearch'):
-            with pytest.raises(ConfigParser.NoSectionError) as excinfo:
+            with pytest.raises(puppet_es.ExternalDependencyError) as excinfo:
                 puppet_es.get_conf()
-            assert 'elasticsearch' in excinfo.value
+            assert 'elasticsearch' in str(excinfo.value)
             return
 
         if not config['elasticsearch'].get('host'):
-            with pytest.raises(ConfigParser.NoOptionError) as excinfo:
+            with pytest.raises(puppet_es.ExternalDependencyError) as excinfo:
                 puppet_es.get_conf()
-            assert 'host' in excinfo.value
+            assert 'host' in str(excinfo.value)
             return
 
         if not config['elasticsearch'].get('port'):
-            with pytest.raises(ConfigParser.NoOptionError) as excinfo:
+            with pytest.raises(puppet_es.ExternalDependencyError) as excinfo:
                 puppet_es.get_conf()
-            assert 'port' in excinfo.value
+            assert 'port' in str(excinfo.value)
             return
 
         try:
@@ -117,9 +117,9 @@ def test_get_conf(mockOsEnvGet, config, config_file):
             # This is not a required parameter.
             pass
         except ValueError as e:
-            with pytest.raises(ValueError) as excinfo:
+            with pytest.raises(puppet_es.ExternalDependencyError) as excinfo:
                 puppet_es.get_conf()
-            assert 'Not a boolean' in excinfo.value
+            assert 'Not a boolean' in str(excinfo.value)
             return
 
         try:
