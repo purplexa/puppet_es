@@ -153,7 +153,7 @@ def get_conf():
             # This is not a required parameter.
             pass
         try:
-            result['base']['on_success'] = conf.getboolean('base', 'on_success')
+            result['base']['on_success'] = conf.get('base', 'on_success')
             if result['base']['on_success'] == 'archive':
                 try:
                     result['base']['archive_dir'] = conf.get('base', 'archive_dir')
@@ -164,10 +164,6 @@ def get_conf():
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
             # This is not a required parameter.
             pass
-        except ValueError as e:
-            msg = 'Option "delete_on_success" in section "base" in config file should be a boolean'
-            logger.exception(msg)
-            raise
         return result
     except Exception as e:
         msg = 'Something went wrong while loading the config file: {}'.format(e)
