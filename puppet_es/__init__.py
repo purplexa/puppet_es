@@ -313,13 +313,13 @@ def send_report(report, conf):
     es_submit(report=report_submit, resources=resources_submit, events=events_submit, config=conf)
 
 
-def handle_report_file(action, file, archive_dir=None):
+def handle_report_file(action, filename, archive_dir=None):
     if action == 'delete':
-        os.remove(file)
+        os.remove(filename)
     elif action == 'archive':
         if not archive_dir:
             raise ValueError('Cannot archive without archive_dir set')
-        os.rename(file, '{0}/{1}'.format(archive_dir, os.path.basename(file)))
+        os.rename(filename, '{0}/{1}'.format(archive_dir, os.path.basename(filename)))
     else:
         pass
 
@@ -333,26 +333,26 @@ def main():
         help()
         exit(0)
     try:
-        file = sys.argv[1]
+        filename = sys.argv[1]
         conf = get_conf()
         prep_logging(conf.get('logging', dict()))
-        report = parse_json(file)
+        report = parse_json(filename)
         send_report(report, conf)
     except ReportParseError:
         if conf and 'base' in conf:
             behavior = conf['base'].get('on_error', 'ignore')
-            handle_report_file(behavior, file, conf['base'].get('archive_dir', None))
+            handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
         else:
-            handle_report_file('ignore', file)
+            handle_report_file('ignore', filename)
         raise
     except ExternalDependencyError:
         raise
     except NonIdempotentElasticSearchError:
         if conf and 'base' in conf:
             behavior = conf['base'].get('on_error', 'ignore')
-            handle_report_file(behavior, file, conf['base'].get('archive_dir', None))
+            handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
         else:
-            handle_report_file('ignore', file)
+            handle_report_file('ignore', filename)
         raise
     except Exception as e:
         logger.exception(str(e))
@@ -360,7 +360,7 @@ def main():
     else:
         if conf and 'base' in conf:
             behavior = conf['base'].get('on_success', 'ignore')
-            handle_report_file(behavior, file, conf['base'].get('archive_dir', None))
+            handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
         else:
-            handle_report_file('ignore', file)
+            handle_report_file('ignore', filename)
 
