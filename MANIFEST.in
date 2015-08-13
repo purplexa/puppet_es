@@ -1,4 +1,4 @@
 include etc/puppet_es.conf.example
 include etc/puppet_template.json
 include LICENSE
-include README.md
+include README.rst
