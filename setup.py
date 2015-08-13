@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='puppet_es',
-      version='0.3.0',
+      version='0.3.1',
       description='Tooling for submitting JSON dumps of Puppet reports to ElasticSearch',
       url='http://github.com/thrnio/puppet_es',
       author='Ryan Whitehurst',
