@@ -315,10 +315,12 @@ def send_report(report, conf):
 
 def handle_report_file(action, filename, archive_dir=None):
     if action == 'delete':
+        logger.info('Deleting file {}'.format(filename))
         os.remove(filename)
     elif action == 'archive':
         if not archive_dir:
             raise ValueError('Cannot archive without archive_dir set')
+        logger.info('Moving file {0} to {1}'.format(filename, archive_dir))
         os.rename(filename, '{0}/{1}'.format(archive_dir, os.path.basename(filename)))
     else:
         pass
@@ -338,16 +340,19 @@ def main():
         prep_logging(conf.get('logging', dict()))
         report = parse_json(filename)
         send_report(report, conf)
-    except ReportParseError:
+    except ReportParseError as e:
+        logging.exception('Caught ReportParseError: {}'.format(e))
         if conf and 'base' in conf:
             behavior = conf['base'].get('on_error', 'ignore')
             handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
         else:
             handle_report_file('ignore', filename)
         raise
-    except ExternalDependencyError:
+    except ExternalDependencyError as e:
+        logging.exception('Caught ExternalDependencyError: {}'.format(e))
         raise
-    except NonIdempotentElasticSearchError:
+    except NonIdempotentElasticSearchError as e:
+        logging.exception('Caught NonIdempotentElasticSearchError: {}'.format(e))
         if conf and 'base' in conf:
             behavior = conf['base'].get('on_error', 'ignore')
             handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
@@ -355,9 +360,11 @@ def main():
             handle_report_file('ignore', filename)
         raise
     except Exception as e:
+        logging.exception('Caught Exception')
         logger.exception(str(e))
         raise
     else:
+        logging.info('Successfully completed job')
         if conf and 'base' in conf:
             behavior = conf['base'].get('on_success', 'ignore')
             handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
