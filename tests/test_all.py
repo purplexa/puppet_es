@@ -20,7 +20,7 @@ import puppet_es
 @patch('puppet_es.logging.StreamHandler', autospec=True)
 @patch('puppet_es.logging.FileHandler', autospec=True)
 def test_prep_logging(mockFileH, mockStreamH, mockLogger, config):
-    puppet_es.prep_logging(config)
+    puppet_es.prep_logging(config, puppet_es.default_log_format.format('no file'))
     mockLogger.setLevel.assert_called_with(getattr(logging, config.get('level', 'WARNING')))
     info_calls = []
     add_calls = []

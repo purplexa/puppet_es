@@ -30,6 +30,8 @@ import elasticsearch.helpers
 
 
 logger = logging.getLogger(__name__)
+syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
+default_log_format = '%(asctime)s %(pathname)s[%(process)d] file[{}]%(message)s'
 
 
 class ReportParseError(Exception):
@@ -48,18 +50,26 @@ class InvalidReport(ValueError):
     pass
 
 
-def prep_logging(conf):
+def prep_logging(conf, log_format):
     try:
+        log_formatter = logging.Formatter(log_format)
         logger.setLevel(getattr(logging, conf.get('level', 'WARNING')))
         use_syslog = conf.get('syslog', True)
         logfile = conf.get('file')
         stderr = conf.get('stderr', False)
         if not use_syslog:
             logger.removeHandler(syslog_handler)
+        else:
+            syslog_handler.setFormatter(log_formatter)
         if logfile:
-            logger.addHandler(logging.FileHandler(logfile))
+            file_handler = logging.FileHandler(logfile)
+            file_handler.setFormatter(log_formatter)
+            logger.addHandler(file_handler)
         if stderr:
-            logger.addHandler(logging.StreamHandler())
+            stderr_formatter = logging.StreamHandler()
+            stderr_formatter.setFormatter(log_formatter)
+            logger.addHandler(stderr_formatter)
+        logger.info('Using log format {}'.format(log_format))
         if use_syslog:
             logger.info('Logging to syslog')
         if logfile:
@@ -329,20 +339,20 @@ def handle_report_file(action, filename, archive_dir=None):
 
 
 def main():
-    global logger
-    global syslog_handler
-    syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
-    base_log_format = '%(asctime)s %(pathname)s[%(process)d] {}%(message)s'
-    logger.setFormatter(logging.Formatter(base_log_format.format('')))
+    no_file_formatter = logging.Formatter(default_log_format.format('no file loaded yet'))
+    syslog_handler.setFormatter(no_file_formatter)
     logger.addHandler(syslog_handler)
     if len(sys.argv) < 2 or sys.argv[1] == '-h' or sys.argv[1] == '--help':
         help()
         exit(0)
     try:
         filename = sys.argv[1]
-        logger.setFormatter(logging.Formatter(base_log_format.format('file[{}] '.format(filename))))
         conf = get_conf()
-        prep_logging(conf.get('logging', dict()))
+        if conf.get('logging') and conf['logging'].get('log_format'):
+            log_format = conf['logging']['log_format'].format(filename)
+        else:
+            log_format = default_log_format.format(filename)
+        prep_logging(conf.get('logging', dict()), log_format)
         report = parse_json(filename)
         send_report(report, conf)
     except ReportParseError as e:
