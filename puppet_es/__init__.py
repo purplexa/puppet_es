@@ -332,12 +332,15 @@ def main():
     global logger
     global syslog_handler
     syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
+    base_log_format = '%(asctime)s %(pathname)s[%(process)d] {}%(message)s'
+    logger.setFormatter(logging.Formatter(base_log_format.format('')))
     logger.addHandler(syslog_handler)
     if len(sys.argv) < 2 or sys.argv[1] == '-h' or sys.argv[1] == '--help':
         help()
         exit(0)
     try:
         filename = sys.argv[1]
+        logger.setFormatter(logging.Formatter(base_log_format.format('file[{}] '.format(filename))))
         conf = get_conf()
         prep_logging(conf.get('logging', dict()))
         report = parse_json(filename)
