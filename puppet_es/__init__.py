@@ -259,7 +259,7 @@ def prep_events(report):
                 for key in ['transaction_uuid', 'configuration_version', 'environment', 'host']:
                     result[key] = report[key]
                 # We need to be able to identify which resource the event was for.
-                result['resource_name'] = resource[name]
+                result['resource_name'] = name
                 # These are actually all the fields in report version 4.
                 for key in ['audited', 'property', 'previous_value', 'desired_value', 'historical_value', 'message', 'name',
                             'time', 'status']:
