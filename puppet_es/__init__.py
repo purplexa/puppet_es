@@ -202,21 +202,23 @@ def prep_report(source):
         for key in ['transaction_uuid', 'host', 'time', 'configuration_version',
                     'status', 'environment']:
             result[key] = source[key]
-        # Below, we want to pull out certain metrics and make them top-level
-        # fields because ElasticSearch likes that better.
 
-        # We want the counts for all the resource statuses.
-        for k, v in {v[0]: v[2] for v in source['metrics']['resources']['values']}.iteritems():
-            result['{}_resources'.format(k)] = v
-        # We want the counts for all the event statuses.
-        for k, v in {v[0]: v[2] for v in source['metrics']['events']['values']}.iteritems():
-            result['{}_events'.format(k)] = v
-        # We only want the global timing metrics, not the per-resource-type ones.
-        times = {v[0]: v[2] for v in source['metrics']['time']['values']}
-        for key in ['config_retrieval', 'total']:
-            result['{}_time'.format(key)] = times[key]
-        # There's only a single changes count value.
-        result['total_changes'] = source['metrics']['changes']['values'][0][2]
+        # Below, we want to pull out certain metrics and make them top-level
+        # fields because ElasticSearch likes that better. Note that there are
+        # no metrics in a failed compile.
+        if source.get('metrics'):
+            # We want the counts for all the resource statuses.
+            for k, v in {v[0]: v[2] for v in source['metrics']['resources']['values']}.iteritems():
+                result['{}_resources'.format(k)] = v
+            # We want the counts for all the event statuses.
+            for k, v in {v[0]: v[2] for v in source['metrics']['events']['values']}.iteritems():
+                result['{}_events'.format(k)] = v
+            # We only want the global timing metrics, not the per-resource-type ones.
+            times = {v[0]: v[2] for v in source['metrics']['time']['values']}
+            for key in ['config_retrieval', 'total']:
+                result['{}_time'.format(key)] = times[key]
+            # There's only a single changes count value.
+            result['total_changes'] = source['metrics']['changes']['values'][0][2]
         return result
     except Exception as e:
         msg = 'Something went wrong while preparing the report object for submission: {}'.format(e)
@@ -227,21 +229,22 @@ def prep_report(source):
 def prep_resources(report):
     try:
         results = []
-        for name, resource in report['resource_statuses'].iteritems():
-            # Some of the fields should have a different key name from the report.
-            result = {
-                'name': name,
-                'resource_title': resource['title'],
-                'file_line': resource['line'],
-            }
-            # We want to set some values from the global report for correlation.
-            for key in ['transaction_uuid', 'configuration_version', 'environment', 'host']:
-                result[key] = report[key]
-            # We only care about some of the fields on the resource.
-            for key in ['resource_type', 'file', 'failed', 'changed', 'time', 'out_of_sync', 'skipped', 'change_count',
-                        'out_of_sync_count']:
-                result[key] = resource[key]
-            results.append(result)
+        if report.get('resource_statuses'):
+            for name, resource in report['resource_statuses'].iteritems():
+                # Some of the fields should have a different key name from the report.
+                result = {
+                    'name': name,
+                    'resource_title': resource['title'],
+                    'file_line': resource['line'],
+                }
+                # We want to set some values from the global report for correlation.
+                for key in ['transaction_uuid', 'configuration_version', 'environment', 'host']:
+                    result[key] = report[key]
+                # We only care about some of the fields on the resource.
+                for key in ['resource_type', 'file', 'failed', 'changed', 'time', 'out_of_sync', 'skipped',
+                            'change_count', 'out_of_sync_count']:
+                    result[key] = resource[key]
+                results.append(result)
         return results
     except Exception as e:
         msg = 'Something went wrong while preparing the resource_status objects for submission: {}'.format(e)
@@ -252,19 +255,20 @@ def prep_resources(report):
 def prep_events(report):
     try:
         results = []
-        for name, resource in report['resource_statuses'].iteritems():
-            for event in resource['events']:
-                result = dict()
-                # We want to set some values from the global report for correlation.
-                for key in ['transaction_uuid', 'configuration_version', 'environment', 'host']:
-                    result[key] = report[key]
-                # We need to be able to identify which resource the event was for.
-                result['resource_name'] = name
-                # These are actually all the fields in report version 4.
-                for key in ['audited', 'property', 'previous_value', 'desired_value', 'historical_value', 'message', 'name',
-                            'time', 'status']:
-                    result[key] = event[key]
-                results.append(result)
+        if report.get('resource_statuses'):
+            for name, resource in report['resource_statuses'].iteritems():
+                for event in resource['events']:
+                    result = dict()
+                    # We want to set some values from the global report for correlation.
+                    for key in ['transaction_uuid', 'configuration_version', 'environment', 'host']:
+                        result[key] = report[key]
+                    # We need to be able to identify which resource the event was for.
+                    result['resource_name'] = name
+                    # These are actually all the fields in report version 4.
+                    for key in ['audited', 'property', 'previous_value', 'desired_value', 'historical_value', 'message',
+                                'name', 'time', 'status']:
+                        result[key] = event[key]
+                    results.append(result)
         return results
     except Exception as e:
         msg = 'Something went wrong while preparing the event objects for submission: {}'.format(e)
