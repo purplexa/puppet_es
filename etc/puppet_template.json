@@ -1,5 +1,5 @@
 {
-  "template": "puppet",
+  "template": "puppet-*",
   "settings": {
     "index.refresh_interval": "5s"
   },
@@ -22,7 +22,8 @@
          "transaction_uuid": { "type": "string", "index": "not_analyzed" },
          "configuration_version": {"type": "integer" },
          "environment": { "type": "string", "index": "not_analyzed" },
-         "host": { "type": "string", "index": "not_analyzed" }
+         "host": { "type": "string", "index": "not_analyzed" },
+         "master": { "type": "string", "index": "not_analyzed" }
          }
        },
     "report": {

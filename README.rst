@@ -36,7 +36,7 @@ Configuring
 Configuration is read from the file specified in the environment
 variable ``PUPPET_ES_CONFIG`` (defaults to ``/etc/puppet_es.conf``) and
 uses ConfigParser syntax. A sample configuration file is included as
-```etc/puppet_es.conf.example`` <etc/puppet_es.conf.example>`__.
+`etc/puppet_es.conf.example`_.
 
 Section: ``base``
 ~~~~~~~~~~~~~~~~~
@@ -71,6 +71,21 @@ to ElasticSearch over HTTP.
 **``port``** (required) The port for connecting to ElasticSearch over
 HTTP.
 
+**``index``** (optional) The index name to send data to. This can be a
+Python formatted string in the ``Formatter`` style, with the following
+available variables:
+
+- ``certname`` the certname the report is from
+- ``fqdn`` the fqdn of the node this script is running on
+- ``isoday`` the ISO day number for the report
+- ``isoweek`` the ISO week number for the report
+- ``isoyear`` the ISO year number for the report
+- ``day`` the numerical day of the year for the report
+- ``month`` the numerical month of the year for the report
+- ``year`` the year for the report
+
+Defaults to ``'puppet-{isoyear}.{isoweek}'``
+
 Section: ``logging``
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -91,5 +106,7 @@ Configuring ElasticSearch
 -------------------------
 
 An example ElasticSearch template that supports the format this script
-uses can be found at
-```etc/puppet_template.json`` <etc/puppet_template.json>`__.
+uses can be found at `etc/puppet_template.json`_.
+
+.. _`etc/puppet_es.conf.example`: etc/puppet_es.conf.example
+.. _`etc/puppet_template.json`: etc/puppet_template.json

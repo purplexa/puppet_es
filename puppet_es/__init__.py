@@ -22,9 +22,11 @@ from contextlib import contextmanager
 import json
 import logging
 import logging.handlers
+import socket
 import sys
 import os
 
+import dateutil.parser
 from elasticsearch import Elasticsearch
 import elasticsearch.helpers
 
@@ -123,6 +125,11 @@ def get_conf():
                 logger.exception(msg)
                 raise
         try:
+            result['elasticsearch']['index'] = conf.get('elasticsearch', 'index')
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
+            # This is not a required parameter.
+            pass
+        try:
             result['logging']['level'] = conf.get('logging', 'level')
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
             # This is not a required parameter.
@@ -199,9 +206,11 @@ def prep_report(source):
     try:
         result = dict()
         # We want the values for these keys on the top-level object.
-        for key in ['transaction_uuid', 'host', 'time', 'configuration_version',
-                    'status', 'environment']:
+        for key in ['transaction_uuid', 'host', 'time', 'configuration_version', 'status', 'environment']:
             result[key] = source[key]
+
+        # We add the fqdn of the node we're running on as "master"
+        result['master'] = socket.getfqdn()
 
         # Below, we want to pull out certain metrics and make them top-level
         # fields because ElasticSearch likes that better. Note that there are
@@ -234,6 +243,7 @@ def prep_resources(report):
                 # Some of the fields should have a different key name from the report.
                 result = {
                     'name': name,
+                    'master': socket.getfqdn(),
                     'resource_title': resource['title'],
                     'file_line': resource['line'],
                 }
@@ -262,6 +272,7 @@ def prep_events(report):
                     # We want to set some values from the global report for correlation.
                     for key in ['transaction_uuid', 'configuration_version', 'environment', 'host']:
                         result[key] = report[key]
+                    result['master'] = socket.getfqdn()
                     # We need to be able to identify which resource the event was for.
                     result['resource_name'] = name
                     # These are actually all the fields in report version 4.
@@ -276,9 +287,25 @@ def prep_events(report):
         raise ReportParseError(msg)
 
 
-def generate_actions(report, resources, events):
+def generate_actions(report, resources, events, index='puppet-{isoyear}.{isoweek}'):
+    d = dateutil.parser.parse(report['time'])
+    (isoyear, isoweek, isoday) = d.isocalendar()
+    day = d.day
+    month = d.month
+    year = d.year
+
+    index_vars = {
+        'certname': report['host'],
+        'fqdn': socket.getfqdn(),
+        'isoday': isoday,
+        'isoweek': isoweek,
+        'isoyear': isoyear,
+        'day': day,
+        'month': month,
+        'year': year,
+    }
     actions = []
-    report.update({'_index': 'puppet', '_type': 'report'})
+    report.update({'_index': index.format(**index_vars), '_type': 'report'})
     actions.append(report)
     for resource in resources:
         resource.update({'_index': 'puppet', '_type': 'resource_status'})
