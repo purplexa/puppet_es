@@ -309,10 +309,10 @@ def generate_actions(report, resources, events, index='puppet-{isoyear}.{isoweek
     report.update({'_index': index.format(**index_vars), '_type': 'report'})
     actions.append(report)
     for resource in resources:
-        resource.update({'_index': 'puppet', '_type': 'resource_status'})
+        resource.update({'_index': index.format(**index_vars),  '_type': 'resource_status'})
         actions.append(resource)
     for event in events:
-        event.update({'_index': 'puppet', '_type': 'event'})
+        event.update({'_index': index.format(**index_vars), '_type': 'event'})
         actions.append(event)
     return actions
 
