@@ -22,9 +22,10 @@ from contextlib import contextmanager
 import json
 import logging
 import logging.handlers
+import os
 import socket
 import sys
-import os
+import textwrap
 
 import dateutil.parser
 from elasticsearch import Elasticsearch
@@ -320,18 +321,25 @@ def es_submit(report, resources, events, config):
     try:
         actions = generate_actions(report=report, resources=resources, events=events)
         es = Elasticsearch([{'host': config['elasticsearch']['host'], 'port': config['elasticsearch']['port']}])
-        oks, fails = elasticsearch.helpers.bulk(client=es, actions=actions, raise_on_error=False, raise_on_exception=False)
+        oks, fails = elasticsearch.helpers.bulk(client=es,
+                                                actions=actions,
+                                                raise_on_error=False,
+                                                raise_on_exception=False)
         logger.info('Submitted {0} documents to {1} from report on {2} with transaction_uuid {3}'.format(
             oks, config['elasticsearch']['host'], report['host'], report['transaction_uuid']))
         for err in fails:
-            logger.exception(
-                """
-                Failed to submit data to {0}:
-                    Received status code {1}
-                    Error: {2}
-                    Exception: {3}
-                    Data: {4}
-                """.format(config['elasticsearch']['host'], err['status'], err['error'], err['exception'], err['data']))
+            err = err[u'create']
+            logger.exception(textwrap.dedent("""
+                                             Failed to submit data to {0}:
+                                                 Received status code {1}
+                                                 Error: {2}
+                                                 Exception: {3}
+                                                 Data: {4}
+                                             """.format(config['elasticsearch']['host'],
+                                                        err.get('status'),
+                                             err.get('error'),
+                                             err.get('exception'),
+                                             err.get('data'))))
         if fails:
             msg1 = '{0} document(s) failed to index on {1}'.format(len(fails), config['elasticsearch']['host'])
             es_error = elasticsearch.helpers.BulkIndexError(msg1, fails)
