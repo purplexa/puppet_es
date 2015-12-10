@@ -441,23 +441,37 @@ def main():
 
         reports = dict()
         directory = sys.argv[1]
-        for root, dirs, files in os.walk(directory, onerror=lambda exc: logger.exception(str(exc))):
-
-            for basename in fnmatch.filter(files, '*.json'):
-                filename = '{0}/{1}'.format(root, basename)
-                try:
-                    raw = parse_json(filename)
-                    reports[filename] = prep_full(raw)
-                except ReportParseError as e:
-                    logging.exception('Caught ReportParseError: {}'.format(e))
-                    if conf and 'base' in conf:
-                        behavior = conf['base'].get('on_error', 'ignore')
-                        handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
-                    else:
-                        handle_report_file('ignore', filename)
-                except Exception as e:
-                    logging.exception('Caught Exception')
-                    logger.exception(str(e))
+        if os.path.isfile(directory):
+            try:
+                raw = parse_json(directory)
+                reports[directory] = prep_full(raw)
+            except ReportParseError as e:
+                logging.exception('Caught ReportParseError: {}'.format(e))
+                if conf and 'base' in conf:
+                    behavior = conf['base'].get('on_error', 'ignore')
+                    handle_report_file(behavior, directory, conf['base'].get('archive_dir', None))
+                else:
+                    handle_report_file('ignore', directory)
+            except Exception as e:
+                logging.exception('Caught Exception')
+                logger.exception(str(e))
+        else:
+            for root, dirs, files in os.walk(directory, onerror=lambda exc: logger.exception(str(exc))):
+                for basename in fnmatch.filter(files, '*.json'):
+                    filename = '{0}/{1}'.format(root, basename)
+                    try:
+                        raw = parse_json(filename)
+                        reports[filename] = prep_full(raw)
+                    except ReportParseError as e:
+                        logging.exception('Caught ReportParseError: {}'.format(e))
+                        if conf and 'base' in conf:
+                            behavior = conf['base'].get('on_error', 'ignore')
+                            handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
+                        else:
+                            handle_report_file('ignore', filename)
+                    except Exception as e:
+                        logging.exception('Caught Exception')
+                        logger.exception(str(e))
         try:
             es_submit(reports=reports, config=conf)
         except ExternalDependencyError as e:
