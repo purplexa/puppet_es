@@ -4,7 +4,7 @@ send\_report\_to\_es
 Summary
 -------
 
-Send a puppet report to ElasticSearch.
+Send puppet reports to ElasticSearch.
 
 Usage
 -----
@@ -14,7 +14,7 @@ Command
 
 ::
 
-    send_report_to_es [-h|--help] <filename>
+    send_report_to_es [-h|--help] <directory>
 
 Options
 ~~~~~~~
@@ -28,7 +28,10 @@ Parameters
 
 ::
 
-    filename    The JSON file for the report to load and send to ElasticSearch
+    directory   A directory containing JSON reports. The script will
+                walk the directory recursively, process all JSON files
+                it finds, and submit the report data to ElasticSearch
+                in a single bulk transaction.
 
 Configuring
 -----------
@@ -41,7 +44,7 @@ uses ConfigParser syntax. A sample configuration file is included as
 Section: ``base``
 ~~~~~~~~~~~~~~~~~
 
-**``on_error``** (optional) What to do with the report file when we
+**``on_error``** (optional) What to do with the report files when we
 encounter a parse error or an ElasticSearch error. Possible values:
 
 -  ``delete`` Delete the file off disk

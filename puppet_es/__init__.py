@@ -19,6 +19,8 @@ Parameters:
 from __future__ import print_function
 import ConfigParser
 from contextlib import contextmanager
+import fcntl
+import fnmatch
 import json
 import logging
 import logging.handlers
@@ -34,7 +36,7 @@ import elasticsearch.helpers
 
 logger = logging.getLogger(__name__)
 syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
-default_log_format = '%(asctime)s %(pathname)s[%(process)d] file[{}]%(message)s'
+default_log_format = '%(asctime)s %(pathname)s[%(process)d] %(message)s'
 
 
 class ReportParseError(Exception):
@@ -50,6 +52,10 @@ class NonIdempotentElasticSearchError(Exception):
 
 
 class InvalidReport(ValueError):
+    pass
+
+
+class DuplicateRunError(Exception):
     pass
 
 
@@ -88,6 +94,35 @@ def prep_logging(conf, log_format):
 def help():
     print(__doc__)
     exit(0)
+
+
+@contextmanager
+def get_lock():
+    lockfile = '/tmp/puppet_es.pid'
+    if os.path.isfile(lockfile):
+        with open(lockfile) as f:
+            pid = f.read()
+            if os.kill(pid, 0):
+                msg = 'An existing job is running with pid {}'.format(pid)
+                logging.exception(msg)
+                raise DuplicateRunError(msg)
+            else:
+                logging.warning('Cleaning up stale pid file.')
+                os.remove(lockfile)
+    try:
+        fd = os.open(lockfile, os.O_EXCL|os.O_CREAT|os.O_RDWR)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX|fcntl.LOCK_NB)
+            os.write(fd, str(os.getpid()))
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+            os.remove(lockfile)
+    except OSError as e:
+        msg = 'Could not get lock, perhaps another process is running? {}'.format(str(e))
+        logging.exception(msg)
+        raise
 
 
 def parse_json(filename):
@@ -317,16 +352,23 @@ def generate_actions(report, resources, events, index='puppet-{isoyear}.{isoweek
     return actions
 
 
-def es_submit(report, resources, events, config):
+def es_submit(reports, config):
     try:
-        actions = generate_actions(report=report, resources=resources, events=events)
+        actions = []
+        for filename in reports:
+            report = reports[filename]
+            actions += generate_actions(report=report['report'], resources=report['resources'], events=report['events'])
         es = Elasticsearch([{'host': config['elasticsearch']['host'], 'port': config['elasticsearch']['port']}])
         oks, fails = elasticsearch.helpers.bulk(client=es,
                                                 actions=actions,
                                                 raise_on_error=False,
                                                 raise_on_exception=False)
-        logger.info('Submitted {0} documents to {1} from report on {2} with transaction_uuid {3}'.format(
-            oks, config['elasticsearch']['host'], report['host'], report['transaction_uuid']))
+        logger.info('Submitted {0} documents to {1}'.format(oks, config['elasticsearch']['host']))
+        for filename in reports:
+            report = reports[filename]
+            logger.info('Submitted report for host {0} with transaction uuid {1}'.format(
+                    report['report']['host'],
+                    report['report']['transaction_uuid']))
         for err in fails:
             err = err[u'create']
             logger.exception(textwrap.dedent("""
@@ -353,15 +395,12 @@ def es_submit(report, resources, events, config):
         raise ExternalDependencyError(msg)
 
 
-def send_report(report, conf):
+def prep_full(report):
     if report['report_format'] != 4:
         msg = 'Cannot handle report version {}'.format(report['report_format'])
         logger.exception(msg)
         raise InvalidReport(msg)
-    report_submit = prep_report(report)
-    resources_submit = prep_resources(report)
-    events_submit = prep_events(report)
-    es_submit(report=report_submit, resources=resources_submit, events=events_submit, config=conf)
+    return dict(report=prep_report(report), resources=prep_resources(report), events=prep_events(report))
 
 
 def handle_report_file(action, filename, archive_dir=None):
@@ -378,50 +417,71 @@ def handle_report_file(action, filename, archive_dir=None):
 
 
 def main():
-    no_file_formatter = logging.Formatter(default_log_format.format('no file loaded yet'))
-    syslog_handler.setFormatter(no_file_formatter)
-    logger.addHandler(syslog_handler)
-    if len(sys.argv) < 2 or sys.argv[1] == '-h' or sys.argv[1] == '--help':
-        help()
-        exit(0)
-    try:
-        filename = sys.argv[1]
-        conf = get_conf()
-        if conf.get('logging') and conf['logging'].get('log_format'):
-            log_format = conf['logging']['log_format'].format(filename)
+    with get_lock():
+        no_file_formatter = logging.Formatter(default_log_format.format('no file loaded yet'))
+        syslog_handler.setFormatter(no_file_formatter)
+        logger.addHandler(syslog_handler)
+        if len(sys.argv) < 2 or sys.argv[1] == '-h' or sys.argv[1] == '--help':
+            help()
+            exit(0)
+        try:
+            conf = get_conf()
+            if conf.get('logging') and conf['logging'].get('log_format'):
+                log_format = conf['logging']['log_format']
+            else:
+                log_format = default_log_format
+            prep_logging(conf.get('logging', dict()), log_format)
+        except ExternalDependencyError as e:
+            logging.exception('Caught ExternalDependencyError: {}'.format(e))
+            raise
+        except Exception as e:
+            logging.exception('Caught Exception')
+            logger.exception(str(e))
+            raise
+
+        reports = dict()
+        directory = sys.argv[1]
+        for root, dirs, files in os.walk(directory, onerror=lambda exc: logger.exception(str(exc))):
+
+            for basename in fnmatch.filter(files, '*.json'):
+                filename = '{0}/{1}'.format(root, basename)
+                try:
+                    raw = parse_json(filename)
+                    reports[filename] = prep_full(raw)
+                except ReportParseError as e:
+                    logging.exception('Caught ReportParseError: {}'.format(e))
+                    if conf and 'base' in conf:
+                        behavior = conf['base'].get('on_error', 'ignore')
+                        handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
+                    else:
+                        handle_report_file('ignore', filename)
+                except Exception as e:
+                    logging.exception('Caught Exception')
+                    logger.exception(str(e))
+        try:
+            es_submit(reports=reports, config=conf)
+        except ExternalDependencyError as e:
+            logging.exception('Caught ExternalDependencyError: {}'.format(e))
+            raise
+        except NonIdempotentElasticSearchError as e:
+            logging.exception('Caught NonIdempotentElasticSearchError: {}'.format(e))
+            for filename in reports:
+                if conf and 'base' in conf:
+                    behavior = conf['base'].get('on_error', 'ignore')
+                    handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
+                else:
+                    handle_report_file('ignore', filename)
+                raise
+        except Exception as e:
+            logging.exception('Caught Exception')
+            logger.exception(str(e))
+            raise
         else:
-            log_format = default_log_format.format(filename)
-        prep_logging(conf.get('logging', dict()), log_format)
-        report = parse_json(filename)
-        send_report(report, conf)
-    except ReportParseError as e:
-        logging.exception('Caught ReportParseError: {}'.format(e))
-        if conf and 'base' in conf:
-            behavior = conf['base'].get('on_error', 'ignore')
-            handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
-        else:
-            handle_report_file('ignore', filename)
-        raise
-    except ExternalDependencyError as e:
-        logging.exception('Caught ExternalDependencyError: {}'.format(e))
-        raise
-    except NonIdempotentElasticSearchError as e:
-        logging.exception('Caught NonIdempotentElasticSearchError: {}'.format(e))
-        if conf and 'base' in conf:
-            behavior = conf['base'].get('on_error', 'ignore')
-            handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
-        else:
-            handle_report_file('ignore', filename)
-        raise
-    except Exception as e:
-        logging.exception('Caught Exception')
-        logger.exception(str(e))
-        raise
-    else:
-        logging.info('Successfully completed job')
-        if conf and 'base' in conf:
-            behavior = conf['base'].get('on_success', 'ignore')
-            handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
-        else:
-            handle_report_file('ignore', filename)
+            logging.info('Successfully completed job')
+            for filename in reports:
+                if conf and 'base' in conf:
+                    behavior = conf['base'].get('on_success', 'ignore')
+                    handle_report_file(behavior, filename, conf['base'].get('archive_dir', None))
+                else:
+                    handle_report_file('ignore', filename)
 
